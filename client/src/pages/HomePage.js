@@ -29,16 +29,15 @@ const HomePage = () => {
     if (socketInstance) {
       socketInstance.on("spaceJoined", () => {
         console.log("client: spaceJoined");
-        setNavigateToChat(true); // ✅ Trigger navigation on event
+        setNavigateToChat(true);
       });
 
       return () => {
-        socketInstance.off("spaceJoined"); // ✅ Cleanup event listener
+        socketInstance.off("spaceJoined");
       };
     }
   }, [socketInstance]);
 
-  // ✅ Redirect when state is true
   if (navigateToChat) {
     return <Navigate to="/userspace" />;
   }

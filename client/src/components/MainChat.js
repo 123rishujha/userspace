@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import {
@@ -13,11 +13,15 @@ import {
 } from "@chakra-ui/react";
 import { IoSend } from "react-icons/io5";
 import { socketContext } from "../context/SocketContextProvider";
+// import { MyThrottleFunction } from "../utils/MyThrottleFunc";
 
 const MainChat = () => {
   const { socketInstance, mySpaceName } = useContext(socketContext);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+
+  const clearTypingId = useRef(null);
   const { roomId } = useParams();
 
   const bgColor = useColorModeValue("gray.100", "gray.700");
@@ -33,6 +37,7 @@ const MainChat = () => {
       setMessages([...messages, msgObj]);
       socketInstance.emit("newMsg", roomId, msgObj);
       setNewMessage("");
+      setIsTyping(false);
     }
   };
 
@@ -42,6 +47,13 @@ const MainChat = () => {
     }
   };
 
+  // const handleTyping = MyThrottleFunction((roomId, username) => {
+  //   socketInstance.emit("typing", roomId, username);
+  // }, 2000);
+  const handleTyping = (roomId, username) => {
+    socketInstance.emit("typing", roomId, username);
+  };
+
   useEffect(() => {
     if (socketInstance) {
       socketInstance.on("receivedmsg", ({ text, sender }) => {
@@ -49,6 +61,12 @@ const MainChat = () => {
           ...prev,
           { text, sender, timestamp: new Date() },
         ]);
+      });
+      socketInstance.on("typing", () => {
+        if (clearTypingId.current) clearTimeout(clearTypingId.current);
+        setIsTyping(true);
+
+        clearTypingId.current = setTimeout(() => setIsTyping(false), 2000);
       });
       return () => {
         socketInstance.off("receivedmsg");
@@ -104,6 +122,19 @@ const MainChat = () => {
               </Box>
             ))
           )}
+          {isTyping && (
+            <Box
+              alignSelf={"flex-start"}
+              bg={messageBgColor}
+              p={3}
+              borderRadius="lg"
+              boxShadow="sm"
+              maxWidth="70%"
+              fontWeight={"bold"}
+            >
+              <Text>Typing...</Text>
+            </Box>
+          )}
         </VStack>
 
         {/* Input area */}
@@ -111,7 +142,10 @@ const MainChat = () => {
           <Input
             placeholder="Type your message..."
             value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
+            onChange={(e) => {
+              setNewMessage(e.target.value);
+              handleTyping(roomId, mySpaceName);
+            }}
             onKeyPress={handleKeyPress}
             mr={2}
             borderRadius="md"

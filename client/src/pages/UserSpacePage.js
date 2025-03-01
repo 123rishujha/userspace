@@ -18,14 +18,15 @@ import { useNavigate } from "react-router-dom";
 const UserSpacePage = () => {
   const { socketInstance } = useContext(socketContext);
   const [users, setUsers] = useState([]);
+
   const navigate = useNavigate();
 
   const bgColor = useColorModeValue("white", "gray.800");
   const borderColor = useColorModeValue("gray.200", "gray.700");
   const hoverBgColor = useColorModeValue("gray.50", "gray.700");
 
-  const handleChatWith = (socketId) => {
-    socketInstance.emit("createAndJoinChatRoom", socketId);
+  const handleChatWith = (username) => {
+    socketInstance.emit("createAndJoinChatRoom", username);
   };
 
   useLayoutEffect(() => {
@@ -70,7 +71,7 @@ const UserSpacePage = () => {
             borderColor={borderColor}
             _hover={{ bg: hoverBgColor, cursor: "pointer" }}
             transition="background 0.2s"
-            onClick={() => handleChatWith(user.socketId)}
+            onClick={() => handleChatWith(user.username)}
           >
             <Flex alignItems="center" gap={3} width={"200px"}>
               <Avatar
