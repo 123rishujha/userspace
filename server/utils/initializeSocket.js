@@ -17,22 +17,51 @@ const chatRooms = {
 };
 
 const broadcastAvailableUserInSpaceFunc = (io) => {
-  Object.keys(availableUserSpace).forEach((socketId) => {
+  // Object.keys(availableUserSpace).forEach((socketId) => {
+  //   let withoutCurrent = { ...availableUserSpace };
+  //   delete withoutCurrent[socketId];
+  //   io.to(socketId).emit("getAvailableUserSpace", withoutCurrent);
+  // });
+  Object.keys(availableUserSpace).forEach((username) => {
+    let socketId = availableUserSpace[username]?.socketId;
+
     let withoutCurrent = { ...availableUserSpace };
-    delete withoutCurrent[socketId];
-    io.to(socketId).emit("getAvailableUserSpace", withoutCurrent);
+    delete withoutCurrent[username];
+    let temp = {};
+    for (let key in withoutCurrent) {
+      temp[key] = { username: withoutCurrent[key].username };
+    }
+    if (socketId) {
+      io.to(socketId).emit("getAvailableUserSpace", temp);
+    }
   });
 };
 
-const removeUserFromAvailableUserSpace = (id1, id2) => {
-  delete availableUserSpace[id1];
-  delete availableUserSpace[id2];
+const removeUserFromAvailableUserSpaceById = (users) => {
+  users.forEach((socketId) => {
+    delete availableUserSpace[socketId];
+  });
+};
+
+const findUserBySocket = (socket) => {
+  let foundUsername = Object.values(availableUserSpace).find(
+    (el) => el.socketId == socket.id
+  );
+  return foundUsername;
 };
 
 const triggerGetAvailableUserSpaceEvent = (socket) => {
-  let withoutCurrent = { ...availableUserSpace };
-  delete withoutCurrent[socket.id];
-  socket.emit("getAvailableUserSpace", withoutCurrent);
+  // let withoutCurrent = { ...availableUserSpace };
+  // delete withoutCurrent[socket.id];
+  // socket.emit("getAvailableUserSpace", withoutCurrent);
+
+  let temp = {};
+  for (let key in availableUserSpace) {
+    if (availableUserSpace[key].socketId !== socket.id) {
+      temp[key] = { username: availableUserSpace[key].username };
+    }
+  }
+  socket.emit("getAvailableUserSpace", temp);
 };
 
 function initializeSocket(io) {
@@ -40,25 +69,28 @@ function initializeSocket(io) {
     online[socket.id] = true;
 
     socket.on("joinSpace", (username) => {
-      availableUserSpace[socket.id] = {
+      availableUserSpace[username] = {
         socketId: socket.id,
         username,
       };
       socket.emit("spaceJoined");
       broadcastAvailableUserInSpaceFunc(io);
-      // triggerGetAvailableUserSpaceEvent(socket);
     });
 
     socket.on("newMsg", (roomId, msgObj) => {
       socket.to(roomId).emit("receivedmsg", msgObj);
     });
 
-    socket.on("createAndJoinChatRoom", (socketId) => {
-      // socket id of user where want to connect
-      let roomId = uuidv4();
-      let user1 = availableUserSpace[socketId];
-      let user2 = availableUserSpace[socket.id];
+    socket.on("createAndJoinChatRoom", (username) => {
+      // username of user where want to connect
+      const socketId = availableUserSpace[username].socketId;
+
+      let user1 = availableUserSpace[username];
+      let user2 = findUserBySocket(socket);
+
       if (user1 && user2) {
+        let roomId = uuidv4();
+
         chatRooms[roomId] = {
           roomId: roomId,
           users: [user1, user2],
@@ -68,9 +100,12 @@ function initializeSocket(io) {
         if (socket2) {
           socket2.join(roomId);
         }
-        io.to(roomId).emit("roomCreated", chatRooms[roomId]);
+        io.to(roomId).emit("roomCreated", {
+          roomId: roomId,
+          users: [{ username: user1.username }, { username: user2.username }],
+        });
 
-        removeUserFromAvailableUserSpace(socketId, socket2?.id);
+        removeUserFromAvailableUserSpaceById([socketId, socket2?.id]);
         broadcastAvailableUserInSpaceFunc(io);
       }
     });
@@ -79,8 +114,16 @@ function initializeSocket(io) {
       triggerGetAvailableUserSpaceEvent(socket);
     });
 
+    socket.on("typing", (roomId, username) => {
+      socket.to(roomId).emit("typing", username);
+    });
+
     socket.on("disconnect", () => {
-      console.log("socket disconnected");
+      let found = findUserBySocket(socket);
+      console.log("socket disconnected", found);
+      if (found) {
+        delete availableUserSpace[found.username];
+      }
     });
   });
 }
